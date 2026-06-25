@@ -1,0 +1,177 @@
+services:
+  jobmanager:
+      build: 
+        context: .
+        dockerfile: Dockerfile
+      hostname: jobmanager
+      container_name: jobmanager
+      networks:
+          demo-net:
+      ports:
+        - "8082:8081"
+      command: jobmanager
+      volumes:
+        - flink-checkpoints:/tmp/flink-checkpoints
+        - flink-savepoints:/tmp/flink-savepoints
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8081/overview"]
+        start_period: 30s
+        interval: 5s
+        timeout: 3s
+        retries: 5
+      environment:
+        FLINK_PROPERTIES: |
+          jobmanager.rpc.address: jobmanager
+          taskmanager.numberOfTaskSlots: 4
+          parallelism.default: 2
+          state.backend.type: rocksdb
+          execution.checkpointing.interval: 10s
+          state.backend.rocksdb.localdir: /tmp/flink-rocksdb
+          state.checkpoints.dir: file:///tmp/flink-checkpoints
+          state.savepoints.dir: file:///tmp/flink-savepoints
+
+          state.backend.rocksdb.metrics.estimate-num-keys: true
+          state.backend.rocksdb.metrics.block-cache-usage: true
+          state.backend.rocksdb.metrics.block-cache-capacity: true
+          state.backend.rocksdb.metrics.num-live-versions: true
+          state.backend.rocksdb.metrics.estimate-live-data-size: true
+
+
+  taskmanager-1:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    hostname: taskmanager-1
+    command: taskmanager
+    container_name: taskmanager-1
+
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+
+    networks:
+       demo-net:
+
+    volumes:
+        - flink-checkpoints:/tmp/flink-checkpoints
+        - flink-savepoints:/tmp/flink-savepoints
+        - flink-rocksdb-tm1:/tmp/flink-rocksdb
+
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+        state.backend.type: rocksdb
+        execution.checkpointing.interval: 10s
+        state.backend.rocksdb.localdir: /tmp/flink-rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        state.savepoints.dir: file:///tmp/flink-savepoints
+
+        state.backend.rocksdb.metrics.estimate-num-keys: true
+        state.backend.rocksdb.metrics.block-cache-usage: true
+        state.backend.rocksdb.metrics.block-cache-capacity: true
+        state.backend.rocksdb.metrics.num-live-versions: true
+        state.backend.rocksdb.metrics.estimate-live-data-size: true
+
+
+
+
+  taskmanager-2:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    hostname: taskmanager-2
+    command: taskmanager
+    container_name: taskmanager-2
+
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+
+    networks:
+       demo-net:
+
+    volumes:
+        - flink-checkpoints:/tmp/flink-checkpoints
+        - flink-savepoints:/tmp/flink-savepoints
+        - flink-rocksdb-tm2:/tmp/flink-rocksdb
+
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+        state.backend.type: rocksdb
+        execution.checkpointing.interval: 10s
+        state.backend.rocksdb.localdir: /tmp/flink-rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        state.savepoints.dir: file:///tmp/flink-savepoints
+
+        state.backend.rocksdb.metrics.estimate-num-keys: true
+        state.backend.rocksdb.metrics.block-cache-usage: true
+        state.backend.rocksdb.metrics.block-cache-capacity: true
+        state.backend.rocksdb.metrics.num-live-versions: true
+        state.backend.rocksdb.metrics.estimate-live-data-size: true
+
+
+
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: kafka
+    hostname: kafka
+
+    networks:
+      demo-net:
+
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+    volumes:
+      - kafka-data:/var/lib/kafka/data 
+
+
+  akhq:
+    image: tchiotludo/akhq:0.25.0
+    container_name: akhq
+    hostname: akhq
+
+    depends_on:
+      - kafka
+    networks:
+      demo-net:
+    ports:
+      - "8087:8080"
+    environment:
+      AKHQ_CONFIGURATION: |
+        akhq:
+          connections:
+            local-kafka:
+              properties:
+                bootstrap.servers: "kafka:9092" 
+
+networks:
+  demo-net:
+
+
+volumes:
+  kafka-data:
+  flink-checkpoints:
+  flink-savepoints:
+  flink-rocksdb-tm1:
+  flink-rocksdb-tm2:
