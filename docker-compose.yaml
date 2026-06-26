@@ -210,6 +210,24 @@ services:
       - taskmanager-1
       - taskmanager-2
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+    networks:
+      demo-net:
+
+    depends_on:
+      - prometheus
+
+
 networks:
   demo-net:
 
