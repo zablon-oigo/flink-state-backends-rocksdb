@@ -1,6 +1,7 @@
 package kmart;
 
-
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -26,13 +27,13 @@ public class HighValuePurchaseFilter {
 
     private static final String BROKER_URL = "kafka:9092";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final int LOYALTY_THRESHOLD = 3;
 
     public static void main(String[] args) throws Exception {
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(4);
-
-        env.enableCheckpointing(30000);   
+        env.enableCheckpointing(30000);
 
         KafkaSource<String> source = KafkaSource.<String>builder()
                 .setBootstrapServers(BROKER_URL)
@@ -47,9 +48,8 @@ public class HighValuePurchaseFilter {
                         WatermarkStrategy.noWatermarks(),
                         "Kafka Source")
                 .map(MAPPER::readTree)
-                .filter(node -> node.has("price") && node.get("price").asDouble() > 50);
+                .filter(node -> node.has("price") && node.get("price").asDouble() > 150);
 
-        
         purchases.sinkTo(createPurchaseSink());
 
         DataStream<CustomerStats> customerStats = purchases
@@ -79,7 +79,7 @@ public class HighValuePurchaseFilter {
                         }
                     }
                 })
-                .setTransactionalIdPrefix("purchase-sink-")  
+                .setTransactionalIdPrefix("purchase-sink-")
                 .build();
     }
 
@@ -101,7 +101,7 @@ public class HighValuePurchaseFilter {
                         }
                     }
                 })
-                .setTransactionalIdPrefix("stats-sink-")  
+                .setTransactionalIdPrefix("stats-sink-")
                 .build();
     }
 
@@ -133,11 +133,32 @@ public class HighValuePurchaseFilter {
 
             statsState.update(stats);
 
-            System.out.printf("Customer=%s Count=%d TotalSpent=%.2f%n",
-                    stats.customerId, stats.purchaseCount, stats.totalSpent);
-
-            out.collect(stats);
+            if (stats.purchaseCount > LOYALTY_THRESHOLD) {
+                System.out.printf("LOYAL Customer=%s Count=%d TotalSpent=%.2f%n",
+                        stats.customerId, stats.purchaseCount, stats.totalSpent);
+                out.collect(stats);
+            } else {
+                System.out.printf("Customer=%s Count=%d TotalSpent=%.2f%n",
+                        stats.customerId, stats.purchaseCount, stats.totalSpent);
+            }
         }
     }
+    
+    public static class CustomerStats {
+        public String customerId;
+        public long purchaseCount;
+        public double totalSpent;
 
+        public CustomerStats() {}
+
+        @JsonCreator
+        public CustomerStats(
+                @JsonProperty("customerId") String customerId,
+                @JsonProperty("purchaseCount") long purchaseCount,
+                @JsonProperty("totalSpent") double totalSpent) {
+            this.customerId = customerId;
+            this.purchaseCount = purchaseCount;
+            this.totalSpent = totalSpent;
+        }
+    }
 }
