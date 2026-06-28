@@ -20,13 +20,16 @@ The streaming application continuously processes purchase events, identifies ret
 #### Architecture Diagram
 
 
-Build the Project
+#### Build the Project
 
 ```sh
 mvn clean package
 ```
 
-Inspect the Generated JAR
+#### Inspect the Generated JAR
+
+To verify that the application classes were packaged correctly:
+
 ```sh
 jar tf target/flink-filter.jar
 ```
@@ -43,7 +46,7 @@ Access the JobManager Container
 docker compose exec -it jobmanager bash
 ```
 
-Run the Flink Job
+#### Run the Flink Job
 
 ```sh
 cd /opt/flink/usrlib
